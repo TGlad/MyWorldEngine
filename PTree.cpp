@@ -16,42 +16,6 @@ void PTree::calculateBounds(StateVector &minB, StateVector &maxB)
   minB.velocity = state.velocity - extents.velocity;
 }
 
-// converts state data into a single transform matrix, for concatenating
-PMatrix PTree::getTransform()
-{
-  PMatrix mat;
-  mat.identity();
-  mat.block(0,3,3,3) = position;
-  mat.block(0,0,2,2) = rotation.toMatrix();
-  // now boost the matrix here
-  mat *= scale;
-  return mat;
-}
-StateVector PTree::transformState(const StateVector &localState)
-{
-  // how do velocities transform? I guess we really want to apply special relativity velocity addition
-  return StateVector(transformPosition(localState.position), localState.velocity + velocity);
-}
-Vector3d PTree::transformPosition(const Vector3d &localPosition)
-{
-  Vector3d trans = (rotation * localPosition)*scale;
-  // now boost the vector
-  return trans + position;
-}
-Vector3d PTree::transformDelta(const Vector3d &localOffset)
-{
-  Vector3d trans = (rotation * localOffset)*scale;
-  // now boost the vector
-  return trans;
-}
-Vector3d PTree::transformAngularDelta(const Vector3d &localOffset)
-{
-  Vector3d trans = (rotation * localOffset);  // scale doesn't affect angular measurements
-  // now boost the vector. What does a boost do to an angular measurement?
-  return trans;
-}
-
-
 void PTree::generateContacts()
 {
 
@@ -62,45 +26,43 @@ void PTree::updateState()
   double timeDelta = 1.0/60.0;
   // 1. mass, position and velocity, rotation and angular velocity
   // note that we don't assume position is derivable from vel or visa versa, they aren't always.
-  Vector3d delta(0,0,0), velOffset(0,0,0); 
+  Vector3d delta(0,0,0);
+  FourVelocity fourVel(0,0,0,0); 
   mass = 0.0;
   for (int i = 0; i<children.size(); i++)
   {
     children[i].updateState();
-    delta += children[i].position * children[i].mass;
-    velOffset += children[i].velocity * children[i].mass;
+    delta += children[i].position() * children[i].mass;
+    fourVel += children[i].fourVelocity() * children[i].mass;
     mass += children[i].mass;
   }
   delta /= mass;
-  velOffset /= mass; 
+  Vector3d velOffset = fourVel.velocity(); // note that this isn't an exact average because SR velocities are non-commutative
 
   // move so this tree is centred at centre of mass of children
-  position += transformDelta(delta);
-  velocity += transformDelta(velOffset);
+  position() += matrix.transformDelta(delta);
+  matrix.lorentz().boost(matrix.transformDelta(velOffset));
+  MinkowskiMatrix boost(Event(0,-delta), LorentzMatrix(-velOffset));
   for (int i = 0; i<children.size(); i++)
-  {
-    children[i].position -= delta;
-    children[i].velocity -= velOffset;
-  }
+    children[i].matrix *= boost; // note that boost also changes its position and time value
 
   // 2. angular velocity
   // we assume angle integrates the angular vel. This will be replaced with an 'absoluteOrientation' algorithm at some point
   // at this point the child positions and velocities are relative to the centre of mass
-  double rotationTotalMoment = 0.0;
   momentOfInertia = 0.0;
   Vector3d angVelOffset(0,0,0);
   Matrix3d scatterMatrix;
   scatterMatrix.setZero();
   for (int i = 0; i<children.size(); i++)
   {
-    scatterMatrix += children[i].position * children[i].position.transpose() * children[i].mass;
-    angVelOffset += children[i].position.cross(children[i].velocity)*children[i].mass + children[i].angularVelocity*children[i].momentOfInertia;
-    momentOfInertia += children[i].position.squaredNorm()*children[i].mass + children[i].momentOfInertia;
+    scatterMatrix += children[i].position() * children[i].position().transpose() * children[i].mass;
+    angVelOffset += children[i].position().cross(children[i].velocity())*children[i].mass + children[i].angularVelocity*children[i].momentOfInertia;
+    momentOfInertia += children[i].position().squaredNorm()*children[i].mass + children[i].momentOfInertia;
   }
   angVelOffset /= momentOfInertia;
 
   // now calculate approximate new biggest eigenvector from scatterMatrix
-  Vector3d currentBiggestEigen = rotation * Vector3d(1,0,0); // x axis as biggest
+  Vector3d currentBiggestEigen = matrix.transformDelta(Vector3d(1,0,0)); // x axis as biggest
   Vector3d newBiggestEigen = scatterMatrix * currentBiggestEigen;
   
   // we only rotate this node towards the biggest eigenvalued eigenvector. Good for approximating long shapes, but
@@ -114,16 +76,17 @@ void PTree::updateState()
   rotationDelta.normalize();
 
   // so rotate our state
-  angularVelocity += transformAngularDelta(angVelOffset);
-  rotation = rotation * rotationDelta; // apply rotation over the top of our local angle delta
+  angularVelocity += matrix.transformAngularDelta(angVelOffset);
+  matrix *= MinkowskiMatrix(Event(0), LorentzMatrix(rotationDelta));
+  MinkowskiMatrix unrotate(Event(0), LorentzMatrix(~rotationDelta));
 
   // now rotate children back by this amount
   for (int i = 0; i<children.size(); i++)
   {
-    children[i].velocity -= angVelOffset.cross(children[i].position);
+    children[i].matrix *= unrotate;
     children[i].angularVelocity -= angVelOffset;
-    children[i].rotation *= ~rotationDelta;
-    children[i].position = ~rotationDelta.rotateVector(children[i].position);
+    MinkowskiMatrix unboost(Event(0), LorentzMatrix(~rotationDelta, -angVelOffset.cross(children[i].position())));
+    children[i].matrix *= unboost;
   }
 
   // next we need to adjust the bounding extents to match the contents

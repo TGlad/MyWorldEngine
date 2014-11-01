@@ -23,6 +23,11 @@ struct StateVector
 // may multiply by mass or not
 class FourVector : public Vector4d
 {
+  FourVector(double temporalVal, const Vector3d &spatialVec)
+  {
+    temporal() = temporalVal;
+    spatial() = spatialVec;
+  }
   double squaredNorm()
   {
     Vector4d temp = *this;
@@ -48,6 +53,10 @@ class FourVector : public Vector4d
 // no mass included
 class Event : public FourVector
 {
+  Event(double time)
+  {
+    set(time, 0,0,0);
+  }
   Event(double time, const Vector3d &position)
   {
     set(time, position[0], position[1], position[2]);
@@ -63,6 +72,11 @@ class FourVelocity : public FourVector
   FourVelocity(double lorentzFactor, const Vector3d &properVel)
   {
     set(lorentzFactor, properVel[0], properVel[1], properVel[2]);
+  }
+  FourVelocity(const Vector3d &velocity)
+  {
+    FourVector vec(1.0, velocity);
+    *this = vec.fourVelocity();
   }
   inline double &lorentzFactor(){ return (*this)[0]; }
   inline Vector3d &properVelocity(){ return block<3,1>(1,0); }
