@@ -182,11 +182,23 @@
 			UniqueIdentifier="{93995380-89BD-4b04-88EB-625FBE52EBFB}"
 			>
 			<File
+				RelativePath=".\Matrices.h"
+				>
+			</File>
+			<File
+				RelativePath=".\PTree.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\PTree.h"
 				>
 			</File>
 			<File
 				RelativePath=".\StandardIncludes.h"
+				>
+			</File>
+			<File
+				RelativePath=".\Vectors.h"
 				>
 			</File>
 		</Filter>
