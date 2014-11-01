@@ -35,7 +35,7 @@ class FourVector : public Vector4d
   }
 
   // not necessarily position and time, it could be momentum and mass, or power and force. 
-  inline Vector3d &spatial(){ return block(1,0,3,0); }
+  inline Vector3d &spatial(){ return block<3,1>(1,0); }
   inline double &temporal(){ return (*this)[0]; }
 
   // however these are reasonable to provide as they are scale invariant ratios, so give some sort of derivative
@@ -52,7 +52,7 @@ class Event : public FourVector
   {
     set(time, position[0], position[1], position[2]);
   }
-  inline Vector3d &position(){ return block(1,0,3,0); }
+  inline Vector3d &position(){ return block<3,1>(1,0); }
   inline double &time(){ return (*this)[0]; }
   double properTime(){ return norm(); }
 };
@@ -65,5 +65,5 @@ class FourVelocity : public FourVector
     set(lorentzFactor, properVel[0], properVel[1], properVel[2]);
   }
   inline double &lorentzFactor(){ return (*this)[0]; }
-  inline Vector3d &properVelocity(){ return block(1,0,3,0); }
+  inline Vector3d &properVelocity(){ return block<3,1>(1,0); }
 };
