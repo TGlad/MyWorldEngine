@@ -14,10 +14,11 @@ struct PTree
   MinkowskiMatrix matrix;
 
   // accessors from matrix. TODO: make these efficient!
-  Vector3d position(){ return matrix.event().position; }
-  Vector3d velocity(){ return matrix.lorentzMatrix().fourVector().velocity(); } 
-  double scale(){ return matrix.lorentzMatrix().scale() }; // TODO: fix. Can we have a just spatial scale? or must we scale time too?
-  Quaternion rotation(){ return Quaternion(matrix.lorentzMatrix().spatialMatrix()); }
+  Vector3d position(){ return matrix.event().position(); }
+  Vector3d velocity(){ return matrix.lorentz().fourVector().velocity(); } 
+  FourVelocity fourVelocity(){ return (FourVelocity)matrix.lorentz().fourVector(); } 
+  double scale(){ return matrix.lorentz().scale() }; // TODO: fix. Can we have a just spatial scale? or must we scale time too?
+  Quaternion calculateRotation(){ return Quaternion(matrix.lorentz().spatial()); }
   
   Vector3d angularVelocity;
   double mass;
