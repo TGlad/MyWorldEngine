@@ -1,13 +1,26 @@
 #include "standardIncludes.h"
 typedef Matrix<double, 4, 4> PMatrix;
 
-struct Extents
+struct StateVector
 {
-  Extents(const Vector3d &pos, const Vector3d &vel) : position(pos), velocity(vel) {}
+  StateVector(const Vector3d &pos, const Vector3d &vel) : position(pos), velocity(vel) {}
   vector3d position;
   vector3d velocity;
+  StateVector operator +(const StateVector &vec)
+  {
+    return StateVector(position + vec.position, velocity + vec.velocity);
+  }
+  StateVector operator -(const StateVector &vec)
+  {
+    return StateVector(position - vec.position, velocity - vec.velocity);
+  }
+  StateVector operator /(double d)
+  {
+    return StateVector(position / d, velocity / d);
+  }
 };
 struct Contact;
+
 
 // implements a parallelotope tree, i.e. 6d boxes with transforms. Each node's data is relative to its parent
 struct PTree
@@ -16,7 +29,7 @@ struct PTree
 
   // relative to parent. These are summary data of the contents of this tree
   Vector3d position;
-  Vector3d velocity;
+  Vector3d velocity; // since velocities don't sum in speical relativity, should we use a rapidity vector here instead?
   double scale;
   Quaternion rotation;
   Vector3d angularVelocity;
@@ -24,7 +37,25 @@ struct PTree
   double momentOfInertia; // will be replaced with an inertial tensor at some point
 
   // relative to scale and rotation above
-  Extents extents; 
+  StateVector minBound; 
+  StateVector maxBound; 
+  StateVector boxCentre(){ return (minBound + maxBound) / 2.0; } 
+  StateVector boxExtents(){ return (maxBound - minBound) / 2.0; } 
+  void calculateBounds(StateVector &minB, StateVector &maxB)
+  {
+    StateVector state = transformState(boxCentre());
+    StateVector extents = boxExtents();
+    Vector3d vs[3] = {transformDelta(Vector3d(extents.position[0], 0, 0)),
+                      transformDelta(Vector3d(0, extents.position[1], 0)),
+                      transformDelta(Vector3d(0, 0, extents.position[2]))};
+    Vector3d parentExtents;
+    for (int i = 0; i<3; i++)
+      parentExtents[i] = abs(vs[0][i]) + abs(vs[1][i]) + abs(vs[2][i]);
+    minB.position = state.position - parentExtents;
+    maxB.position = state.position + parentExtents;
+    minB.velocity = state.velocity - extents.velocity;
+    minB.velocity = state.velocity - extents.velocity;
+  }
 
   // converts state data into a single transform matrix, for concatenating
   PMatrix getTransform()
@@ -36,6 +67,11 @@ struct PTree
     // now boost the matrix here
     mat *= scale;
     return mat;
+  }
+  StateVector transformState(const StateVector &localState)
+  {
+    // how do velocities transform? I guess we really want to apply special relativity velocity addition
+    return StateVector(transformPosition(localState.position), localState.velocity + velocity);
   }
   Vector3d transformPosition(const Vector3d &localPosition)
   {
@@ -69,19 +105,15 @@ struct PTree
     // note that we don't assume position is derivable from vel or visa versa, they aren't always.
     Vector3d delta(0,0,0), velOffset(0,0,0); 
     mass = 0.0;
-    vector<Vector3d> offsets(children.size());
     for (int i = 0; i<children.size(); i++)
     {
-      offsets[i] = -children[i].position; // we should record old orientations too, but this is extra cost
       children[i].updateState();
       delta += children[i].position * children[i].mass;
       velOffset += children[i].velocity * children[i].mass;
       mass += children[i].mass;
-      offsets[i] += children[i].position;
     }
     delta /= mass;
     velOffset /= mass; 
-    angleDelta /= momentOfInertia;
 
     // move so this tree is centred at centre of mass of children
     position += transformDelta(delta);
@@ -97,21 +129,33 @@ struct PTree
     // at this point the child positions and velocities are relative to the centre of mass
     double rotationTotalMoment = 0.0;
     momentOfInertia = 0.0;
-    Vector3d angVelOffset(0,0,0), angleDelta(0,0,0);
+    Vector3d angVelOffset(0,0,0);
+    Matrix3d scatterMatrix;
+    scatterMatrix.setZero();
     for (int i = 0; i<children.size(); i++)
     {
-      double childMoment = children[i].position.squaredNorm()*children[i].mass;
-      angleDelta += children[i].position.cross(offsets[i])*children[i].mass; // plus rotational deltas, but these are excess computation
+      scatterMatrix += children[i].position * children[i].position.transpose() * children[i].mass;
       angVelOffset += children[i].position.cross(children[i].velocity)*children[i].mass + children[i].angularVelocity*children[i].momentOfInertia;
-      rotationTotalMoment += childMoment;
-      momentOfInertia += childMoment + children[i].momentOfInertia;
+      momentOfInertia += children[i].position.squaredNorm()*children[i].mass + children[i].momentOfInertia;
     }
-    angleDelta /= rotationTotalMoment;
     angVelOffset /= momentOfInertia;
+
+    // now calculate approximate new biggest eigenvector from scatterMatrix
+    Vector3d currentBiggestEigen = rotation * Vector3d(1,0,0); // x axis as biggest
+    Vector3d newBiggestEigen = scatterMatrix * currentBiggestEigen;
+    
+    // we only rotate this node towards the biggest eigenvalued eigenvector. Good for approximating long shapes, but
+    // we would need a full eigendecomposition to properly diagonalise an inertial tensor from the children. 
+    // this is a bit expensive at the moment, especially as proper physics simulation is not yet implemented.
+
+    // non-unit length rotation from cross and dot of vectors
+    Vector3d cross = currentBiggestEigen.cross(newBiggestEigen);
+    Quaternion rotationDelta(currentBiggestEigen.dot(newBiggestEigen), cross[0], cross[1], cross[2]);
+    rotationDelta[0] += rotationDelta.norm();
+    rotationDelta.normalize();
 
     // so rotate our state
     angularVelocity += transformAngularDelta(angVelOffset);
-    Quaternion rotationDelta(angleDelta);
     rotation = rotation * rotationDelta; // apply rotation over the top of our local angle delta
 
     // now rotate children back by this amount
@@ -121,6 +165,20 @@ struct PTree
       children[i].angularVelocity -= angVelOffset;
       children[i].rotation *= ~rotationDelta;
       children[i].position = ~rotationDelta.rotateVector(children[i].position);
+    }
+
+    // next we need to adjust the bounding extents to match the contents
+    Extents minExtents(Vector3d(-1e10, -1e10, -1e10), Vector3d(-1e10, -1e10, -1e10));
+    Extents maxExtents(Vector3d(1e10, 1e10, 1e10), Vector3d(1e10, 1e10, 1e10));
+
+    for (int i = 0; i<children.size(); i++)
+    {
+      StateVector childMin, childMax;
+      children[i].calculateBounds(childMin, childMax);
+      minExtents.position = minVector(minExtents.position, childMin.position);
+      maxExtents.position = maxVector(maxExtents.position, childMax.position);
+      minExtents.velocity = minVector(minExtents.velocity, childMin.velocity);
+      maxExtents.velocity = maxVector(maxExtents.velocity, childMax.velocity);
     }
   }
 

@@ -4,14 +4,14 @@
 int _tmain(int argc, _TCHAR* argv[])
 {
   // 1. build a tree
-  PNode node(Vector3d(0,0,0), Quaternion(1,0,0,0), Extents(1,1,1, 1,1,1), Vector3d(0,0,0), Vector3d(0,0,0));
-  PNode child[4];
+  PTree tree(Vector3d(0,0,0), Quaternion(1,0,0,0), Extents(1,1,1, 1,1,1), Vector3d(0,0,0), Vector3d(0,0,0), 1.0);
+  PTree child[4];
   for (int i = 0; i<4; i++)
   {
-    child[i] = node;
-    child[i].state.position = Vector3d(i,0,0);
-    child[i].transform *= 0.5;
-    node.children.push_back(child[i]);
+    child[i] = tree;
+    child[i].position = Vector3d(i,0,0);
+    child[i].scale *= 0.5;
+    tree.children.push_back(child[i]);
   }
 
 	return 0;
