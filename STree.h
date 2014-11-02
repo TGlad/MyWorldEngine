@@ -5,9 +5,9 @@
 struct Contact;
 
 // implements a parallelotope tree, i.e. 6d boxes with transforms. Each node's data is relative to its parent
-struct PTree
+struct STree
 {
-  PTree(const Vector3d &pos, const Quaternion &rot, const Extents &extents, const Vector3d &vel, const Vector3d &angVel, double scale) : position(pos), rotation(rot), extents(extents), velocity(vel), angularVelocity(angVel), scale(scale), mass(1.0), momentOfInertia(1.0) {}
+  STree(const Vector3d &pos, const Quaternion &rot, const Extents &extents, const Vector3d &vel, const Vector3d &angVel, double scale) : position(pos), rotation(rot), extents(extents), velocity(vel), angularVelocity(angVel), scale(scale), mass(1.0), momentOfInertia(1.0) {}
 
   // relative to parent. These are summary data of the contents of this tree
   MinkowskiMatrix matrix;
@@ -26,28 +26,23 @@ struct PTree
   void generateContacts();
   void updateState();
 
-  // relative to scale and rotation above
-  Bound minBound; 
-  Bound maxBound; 
-  Bound boxCentre(){ return (minBound + maxBound) / 2.0; } 
-  Bound boxExtents(){ return (maxBound - minBound) / 2.0; } 
-  void calculateBounds(Bound &minB, Bound &maxB);
+  // relative to scale above
+  double radius; 
 
-
-  vector<PTree> children;
+  vector<STree> children;
   vector<Contact> contacts;
 };
 
 struct Contact
 {
-  Contact(const PTree &p1, const PTree &p2, double depth, FourVector &normal)
+  Contact(const STree &p1, const STree &p2, double depth, FourVector &normal)
   {
     trees[0] = &p1;
     trees[1] = &p2;
     this->depth = depth;
     this->normal = normal;
   }
-  PTree *trees[2];
+  STree *trees[2];
   FourVector normal;
   double depth;
 };

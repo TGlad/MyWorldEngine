@@ -4,8 +4,8 @@
 int _tmain(int argc, _TCHAR* argv[])
 {
   // 1. build a tree
-  PTree tree(Vector3d(0,0,0), Quaternion(1,0,0,0), Extents(1,1,1, 1,1,1), Vector3d(0,0,0), Vector3d(0,0,0), 1.0);
-  PTree child[4];
+  STree tree(Vector3d(0,0,0), Quaternion(1,0,0,0), Extents(1,1,1, 1,1,1), Vector3d(0,0,0), Vector3d(0,0,0), 1.0);
+  STree child[4];
   for (int i = 0; i<4; i++)
   {
     child[i] = tree;
