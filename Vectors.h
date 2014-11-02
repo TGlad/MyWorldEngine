@@ -1,21 +1,22 @@
 #include "StandardIncludes.h"
 
-struct StateVector
+struct Bound
 {
-  StateVector(const Vector3d &pos, const Vector3d &vel) : position(pos), velocity(vel) {}
-  vector3d position;
-  vector3d velocity;
-  StateVector operator +(const StateVector &vec)
+  FourVector fourVec;
+  Vector3d properVelocity;
+  Bound(const FourVector &fourVector, const Vector3d &properVel) : fourVec(fourVector), properVelocity(properVel) {}
+  
+  Bound operator +(const Bound &vec)
   {
-    return StateVector(position + vec.position, velocity + vec.velocity);
+    return Bound(fourVec + vec.fourVec, properVelocity + vec.properVelocity);
   }
-  StateVector operator -(const StateVector &vec)
+  Bound operator -(const Bound &vec)
   {
-    return StateVector(position - vec.position, velocity - vec.velocity);
+    return Bound(fourVec - vec.fourVec, properVelocity - vec.properVelocity);
   }
-  StateVector operator /(double d)
+  Bound operator /(double d)
   {
-    return StateVector(position / d, velocity / d);
+    return Bound(fourVec / d, properVelocity / d);
   }
 };
 

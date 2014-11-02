@@ -1,25 +1,132 @@
 #include "PTree.h"
 
-void PTree::calculateBounds(StateVector &minB, StateVector &maxB)
+// note that mat1 and mat2 are box centres and extent1, extent2 are extents from this
+// TODO: decide whether space should be R4 or M3+1 for calculations. 
+bool ParallelochoronIntersection(const MinkowskiMatrix &mat1, const Bound &extent1, const MinkowskiMatrix &mat2, const Bound &extent2, double &maxDepth, FourVector &maxDepthNormal)
 {
-  StateVector state = transformState(boxCentre());
-  StateVector extents = boxExtents();
-  Vector3d vs[3] = {transformDelta(Vector3d(extents.position[0], 0, 0)),
-                    transformDelta(Vector3d(0, extents.position[1], 0)),
-                    transformDelta(Vector3d(0, 0, extents.position[2]))};
-  Vector3d parentExtents;
-  for (int i = 0; i<3; i++)
-    parentExtents[i] = abs(vs[0][i]) + abs(vs[1][i]) + abs(vs[2][i]);
-  minB.position = state.position - parentExtents;
-  maxB.position = state.position + parentExtents;
-  minB.velocity = state.velocity - extents.velocity;
-  minB.velocity = state.velocity - extents.velocity;
+  // we could convert one into a rectangle, but this involves matrix inverse, so easier to work with both in original format
+
+  maxDepth = -1e10;
+  const MinkowskiMatrix &mat[2] = {mat1, mat2};
+  const Bound &extent[2] = {extent1, extent2}; 
+  LorentzMatrix axes[2] = {mat[0].lorentz() * diagonal(extent[0].fourVec), mat[1].lorentz() * diagonal(extent[1].fourVec)};
+  for (int m = 0; m<2; m++)
+  {
+    FourVector toOther = mat[1].event() - mat[0].event();
+    // 1. corners versus volumes
+    for (int c = 0; c<16; c++) // count the corners
+    {
+      FourVector corner(0,0,0,0);
+      for (int j = 0; j<4; j++)
+        corner += axes[m].col(j) * (2.0*(double)((c>>j)&1) - 1.0);
+//      if (corner.dot(toOther) < 0.0)
+//        continue; // only need to do half the corners (the ones in direction towards other)
+      corner += mat[m].lorentz().fourVector();
+
+      // volumes in 4d have a normal, in this case we are using a cartesian space to intersect... not sure but maybe it is possible in Minkowski space
+      for (int v = 0; v<4; v++) // count the volumes
+      {
+        FourVector volumeCentre = axes[1-m].col(v);
+        if (volumeCentre.dot(toOther) < 0.0)
+          volumeCentre = -volumeCentre;
+        FourVector volumeNormal = volumeCentre;
+        volumeNormal.normalize();
+        volumeCentre += mat[1-m].lorentz().fourVector();
+
+        double depth = (volumeCentre - corner).dot(volumeNormal);
+        if (depth > maxDepth)
+        {
+          maxDepth = depth;
+          maxDepthNormal = volumeNormal;
+        }
+      }
+    }
+
+    // edges vs faces
+    for (int d = 0; d<4; d++) // count the directions
+    {
+      FourVector edgeDirection = mat[m].lorentz().col(d);
+
+      for (int f = 0; f<6; f++) // count the face directions
+      {
+        // axes making up face
+        int d1[6] = {0,0,0,1,1,2};
+        int d2[6] = {1,2,3,2,3,3};
+        // other axes which provide face position
+        int d3[6] = {2,1,1,3,2,0}; 
+        int d4[6] = {3,3,2,0,0,1};
+        FourVector faceDirection[2] = {axes[1-m].col(d1[f]), axes[1-m].col(d1[f])};
+
+        // now get a normal
+        FourVector edgeFaceNormal(1,2,3,4);
+        edgeFaceNormal -= edgeDirection * edgeFaceNormal.dot(edgeDirection) / edgeDirection.squaredNorm();
+        edgeFaceNormal -= faceDirection[0] * edgeFaceNormal.dot(faceDirection[0]) / edgeDirection.squaredNorm();
+        edgeFaceNormal -= faceDirection[1] * edgeFaceNormal.dot(faceDirection[1]) / edgeDirection.squaredNorm();
+        edgeFaceNormal.normalize();
+
+        for (int e = 0; e<8; e++) // count the edge centres
+        {
+          FourVector edgeCentre = mat[m].lorentz().fourVector();
+          for (int j = 0; j<3; j++)
+            edgeCentre += axes[m].col((d+j+1)%4) * (2.0*(double)((e>>j)&1) - 1.0);
+        
+          FourVector faceCentre(0,0,0,0);
+          for (int c = 0; c<4; c++)
+          {
+            double scale1[4] = {1,1,-1,-1};
+            double scale2[4] = {1,-1,1,-1};
+            faceCentre += axes[1-m].col(d3[f])*scale1[c];
+            faceCentre += axes[1-m].col(d4[f])*scale2[c];
+            // can we cull out some face centres here?
+
+            FourVector faceNormal = edgeFaceNormal.dot(faceCentre) > 0.0 ? edgeFaceNormal : -edgeFaceNormal;
+            faceCentre += mat[1-m].lorentz().fourVector();
+
+            double depth = (faceCentre - edgeCentre).dot(faceNormal);
+            if (depth > maxDepth)
+            {
+              maxDepth = depth;
+              maxDepthNormal = faceNormal;
+            }
+          }
+        }
+      }
+    }
+  }
+  return maxDepth > 0.0;
 }
 
+void PTree::generateContacts(const PTree &tree1, const PTree &tree2)
+{
+}
+
+// recursively generate contacts between nodes
 void PTree::generateContacts()
 {
-
+  vector<MinkowskiMatrix> centredMats(children.size());
+  for (int i = 0; i<children.size(); i++)
+  {
+    centredMats[i] = children[i].matrix + children[i].matrix.lorentz() * children[i].boxCentre();
+    centredMats[i] = 
+  }
+  double depth;
+  FourVector normal;
+  for (int i = 0; i<children.size(); i++)
+  {
+    for (int j = i+1; j<children.size(); j++)
+    {
+      if (ParallelochoronIntersection(centredMats[i], children[i].boxExtents(), centredMats[j], children[j].boxExtents(), depth, normal))
+      {
+        contacts.push_back(Contact(children[i], children[j], depth, normal));
+        // need to generate contacts between these two subtrees now
+        generateContacts(children[i], children[j]);
+      }
+    }
+  }
+  for (int i = 0; i<children.size(); i++)
+    generateContacts();
 }
+
 // acts to re-adjust the state to be a good summary of children, for cases where game update of simulation is not completely thorough
 void PTree::updateState() 
 {
@@ -104,6 +211,21 @@ void PTree::updateState()
   }
 }
 
-vector<PTree> children;
-vector<Contact> contacts;
-};
+void PTree::calculateBounds(Bound &minB, Bound &maxB)
+{
+  FourVector state = matrix * boxCentre().fourVec;
+  FourVector extents = boxExtents().fourVec;
+  FourVector vs[4] = {matrix * (FourVector(extents[0], 0, 0, 0)),
+                      matrix * (FourVector(0, extents[1], 0, 0)),
+                      matrix * (FourVector(0, 0, extents[2], 0)),
+                      matrix * (FourVector(0, 0, 0, extents[3]))};
+  FourVector parentExtents;
+  for (int i = 0; i<4; i++)
+    parentExtents[i] = abs(vs[0][i]) + abs(vs[1][i]) + abs(vs[2][i]) + abs(vs[3][i]);
+  minB.fourVec = state - parentExtents;
+  maxB.fourVec = state + parentExtents;
+  /* // how we do this part is uncertain...
+  minB.properVelocity = state.velocity - extents.velocity;
+  minB.properVelocity = state.velocity - extents.velocity;
+  */
+}

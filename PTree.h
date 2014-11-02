@@ -4,7 +4,6 @@
 
 struct Contact;
 
-
 // implements a parallelotope tree, i.e. 6d boxes with transforms. Each node's data is relative to its parent
 struct PTree
 {
@@ -28,11 +27,11 @@ struct PTree
   void updateState();
 
   // relative to scale and rotation above
-  StateVector minBound; 
-  StateVector maxBound; 
-  StateVector boxCentre(){ return (minBound + maxBound) / 2.0; } 
-  StateVector boxExtents(){ return (maxBound - minBound) / 2.0; } 
-  void calculateBounds(StateVector &minB, StateVector &maxB);
+  Bound minBound; 
+  Bound maxBound; 
+  Bound boxCentre(){ return (minBound + maxBound) / 2.0; } 
+  Bound boxExtents(){ return (maxBound - minBound) / 2.0; } 
+  void calculateBounds(Bound &minB, Bound &maxB);
 
 
   vector<PTree> children;
@@ -41,8 +40,14 @@ struct PTree
 
 struct Contact
 {
+  Contact(const PTree &p1, const PTree &p2, double depth, FourVector &normal)
+  {
+    trees[0] = &p1;
+    trees[1] = &p2;
+    this->depth = depth;
+    this->normal = normal;
+  }
   PTree *trees[2];
-  Vector3d normal;
+  FourVector normal;
   double depth;
-  double depthVelocity;  // together these give a time and speed of impact
 };
