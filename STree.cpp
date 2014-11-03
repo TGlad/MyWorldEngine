@@ -19,26 +19,29 @@ bool STree::sphericalHyperboloidIntersection(const STree &child1, const STree &c
   Vector3d relPos = (child[1].position() - child[1].time*child[1].velocity()) - (child[0].position() - child[0].time*child[0].velocity()); // we shift the position to get into the parent's time frame
   // Solve: at^2 + bt + c = 0
   // coefficients of t^2
-  double a = relVel.squaredNorm() - sqr(expansionRate[0]) - sqr(expansionRate[1]);
+  double a = relVel.squaredNorm() - sqr(expansionRate[0] + expansionRate[1]);
   // coefficients of t
-  double b = 2.0*(relVel.dot(relPos) - expansionRate[0]*radius[0] - expansionRate[1]*radius[1]);
+  double b = 2.0*(relVel.dot(relPos) - ((expansionRate[0] + expansionRate[1])*(radius[0] + radius[1]));
   // constant coefficients
-  double c = relPos.squaredNorm() - sqr(radius[0]) - sqr(radius[1]);
+  double c = relPos.squaredNorm() - sqr(radius[0] + radius[1]);
 
-  double root = sqrt(b*b - 4*a*c);
-  double t[2] = {(-b + root) / (2.0*a), (-b - root) / (2.0*a)};
-  for (int i = 0; i<2; i++)
-  {
-    Vector3d pos0 = child[0].position + child[0].velocity*(t[i] - child[0].time);
-    Vector3d pos1 = child[1].position + child[1].velocity*(t[i] - child[1].time);
-    normal = pos1 - pos0;
-    normal.normalize();
-    contactEvent.position = pos0 + normal * child[0].radius;
-    contactEvent.time = contactEvent.position.magnitude();
-    if (t[i] > contactEvent.time && t[i] < contactEvent.time + timeDelta)
-      return true; // if we want, we could check the proximity, and repeat the procedure to get a better time when expansion is not so linear
-  }
-  return false;
+  // nice robust way to do it, combines Quadratic Formula with Citardauq Formula
+  double root = _copysign(sqrt(b*b - 4*a*c), b);
+  double t[2] = {(-b - root) / (2.0*a), 2.0*c / (-b - root) };
+  // TODO: a perhaps better approach to clamping based on time would be to add the time gradient into the speed calculations, so we're using a flat time
+  double minTime = (child[0].time()*radius[0] + child[1].time()*radius[1]) / (radius[0] + radius[1]); // an approximation
+  double mint = max(min(t[0], t[1]), minTime);
+  double maxt = min(max(t[0], t[1]), minTime + timeDelta);
+  if ((mint > minTime + timeDelta) || (maxt < minTime))
+    return false;
+  contactEvent.time = (mint + maxt)*0.5; // choose the contact event as the mid clamped time. Quite a nice choice for a single contact event.
+
+  Vector3d pos0 = child[0].position + child[0].velocity*(contactEvent.time - child[0].time);
+  Vector3d pos1 = child[1].position + child[1].velocity*(contactEvent.time - child[1].time);
+  normal = pos1 - pos0;
+  normal.normalize();
+  contactEvent.position = pos0 + normal * child[0].radius;
+  return true; // if we want, we could check the proximity, and repeat the procedure to get a better time when expansion is not so linear
 }
 
 void STree::generateContacts(const STree &tree1, const STree &tree2)
