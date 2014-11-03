@@ -18,6 +18,11 @@ inline maxVector(const Vector3d &u, const Vector3d &v)
 {
   return Vector3d(max(u[0], v[0]), max(u[1], v[1]), max(u[2], v[2]));
 }
+template<class T>
+inline T sqr(const T &a)
+{
+  return a*a;
+}
 
 
 // TODO: reference additional headers your program requires here

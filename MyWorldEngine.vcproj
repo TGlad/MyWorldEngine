@@ -179,6 +179,10 @@
 				RelativePath=".\MyWorldEngine.cpp"
 				>
 			</File>
+			<File
+				RelativePath=".\STree.cpp"
+				>
+			</File>
 		</Filter>
 		<Filter
 			Name="Header Files"
@@ -190,15 +194,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\PTree.cpp"
-				>
-			</File>
-			<File
-				RelativePath=".\PTree.h"
-				>
-			</File>
-			<File
 				RelativePath=".\StandardIncludes.h"
+				>
+			</File>
+			<File
+				RelativePath=".\STree.h"
 				>
 			</File>
 			<File

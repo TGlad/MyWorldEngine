@@ -1,25 +1,5 @@
 #include "StandardIncludes.h"
 
-struct Bound
-{
-  FourVector fourVec;
-  Vector3d properVelocity;
-  Bound(const FourVector &fourVector, const Vector3d &properVel) : fourVec(fourVector), properVelocity(properVel) {}
-  
-  Bound operator +(const Bound &vec)
-  {
-    return Bound(fourVec + vec.fourVec, properVelocity + vec.properVelocity);
-  }
-  Bound operator -(const Bound &vec)
-  {
-    return Bound(fourVec - vec.fourVec, properVelocity - vec.properVelocity);
-  }
-  Bound operator /(double d)
-  {
-    return Bound(fourVec / d, properVelocity / d);
-  }
-};
-
 // concrete classes will make things clearer, and since they are only interfaces, one can convert to raw matrix types to combine them.
 // may multiply by mass or not
 class FourVector : public Vector4d
