@@ -1,4 +1,4 @@
-#include "PTree.h"
+#include "STree.h"
 static double timeDelta = 1.0/60.0;
 
 bool STree::sphericalHyperboloidIntersection(const STree &child1, const STree &child2, Event &contactEvent, Vector3d &normal)
